@@ -48,30 +48,41 @@ exports.addCmd = rl => {
 
 
 exports.editCmd =(rl,id) => {
-		if(typeof id === "undefined"){
-			errorlog('Falta el parametro id');
-			rl.prompt();
-		} else {
-			try{
-
+validateId(id)
+		.then(id=> models.quiz.findById(id))
+		.then(quiz => {
+			if(!quiz){
+				throw new Error(`No existe quiz con ${id} de id`);
+				}
 				process.stdout.isTTY && setTimeout( () => {rl.write(id.question)},0);
-				
-				rl.question(colorize('Introduzca una pregunta:', 'red'), question => {
-					
+				return makeQuestion(rl, '¿Respuesta?')
+				.then(q=>{
 					process.stdout.isTTY && setTimeout( () => {rl.write(id.answer)},0);
-					rl.question(colorize('Introduzca la respuesta', 'red'), answer => {
-
-						model.update(id, question, answer);
-						log(`[${colorize('Se ha añadido','magenta')}]: ${question} ${colorize('=>','magenta')}${answer}`);
-						rl.prompt();
-					})
-				})
-			}catch(error){
-				errorlog(error.message);
-				rl.prompt();
-			}
-		}
-		rl.prompt();
+					return makeQuestion(rl, `¿Respuesta?`)
+					.then(a=> {
+						quiz.question = q;
+						quiz.answer = a;
+						return quiz;
+					});
+				});
+		})
+		.then(quiz => {
+			return quiz.save();
+		})
+		.then(quiz =>{
+			log(`Se ha cambiado ${colorize(quiz.id,'magenta')}, por: ${quiz.question}$(colorize'=>', 'magenta')}${quiz.answer}`);
+		})
+		.catch(Sequelize.ValidationError, error =>{
+			errorlog('Error en quiz');
+			error.errors.forEach(({message})=> errorlog(message));
+		})
+		.catch(error=>{
+			errorlog(error.message);
+		})
+		.then(()=>{
+			rl.prompt();
+		});
+				
 };
 
 exports.quitCmd = rl => {
@@ -141,7 +152,11 @@ exports.testCmd = (rl,id)  => {
 		validateId(id)
 		.then(id=> models.quiz.findById(id))
 		.then(quiz=>{
-			log(`Pregunta : ${quiz.question}`)
+
+		if(!quiz){
+			throw new Error('No existe quiz con id ${id}');
+		}
+		//	log(`Pregunta : ${quiz.question}`)
 		return makeQuestion(rl, '¿Respuesta:')
 		.then( a=> {
 					if(a.toLowerCase().trim() === quiz.answer.toLowerCase()){
@@ -149,7 +164,7 @@ exports.testCmd = (rl,id)  => {
 					} else {
 							log('Respuesta INCORRECTA');
 					}
-				})
+				});
 		})
 		.catch(error=>{
 				errorlog(error.message);
